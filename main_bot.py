@@ -3,94 +3,115 @@ import os
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import yt_dlp
 from flask import Flask
 from threading import Thread
 
-# إعدادات البوت (التوكن الخاص بك)
+# إعدادات البوت
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
-
-# إعداد اللوجات لمراقبة الأداء
 logging.basicConfig(level=logging.INFO)
-
-# تشغيل البوت والديسباتشر
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
-
-# سيرفر وهمي (Flask) لضمان استمرارية العمل على Render
 app = Flask('')
 
 @app.route('/')
-def home():
-    return "✅ Bot is Online and Running!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
+def home(): return "✅ Bot is Online!"
 
 def keep_alive():
-    t = Thread(target=run)
+    t = Thread(target=lambda: app.run(host='0.0.0.0', port=8080))
     t.start()
 
-# --- 1. رسالة الترحيب (عند الضغط على Start) ---
+# تخزين مؤقت للروابط عشان نعرف المستخدم اختار إيه لأي رابط
+user_data = {}
+
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     welcome_text = (
         "<b>مرحباً بك في بوت الـ VIP العالمي! 💎</b>\n\n"
-        "أنت الآن تستخدم أسرع أداة لتحميل الفيديوهات بجودة عالية ⚡️\n\n"
-        "<b>الخدمات المتاحة حالياً:</b>\n"
-        "• 📥 تحميل تيك توك (بدون علامة مائية)\n"
-        "• 📸 ريلز إنستجرام وفيديوهات فيسبوك\n"
-        "• 🎥 شورتس يوتيوب والمنصات العالمية\n"
-        "• 🎵 استخراج الصوت من أي فيديو\n\n"
-        "<b>كل ما عليك هو إرسال الرابط.. وسأقوم بالسحر! ✨</b>\n\n"
+        "أرسل رابط الفيديو الآن واختر الصيغة المناسبة لك.\n\n"
         "<i>المطور: @i_wi_w</i>"
     )
     await message.reply(welcome_text, parse_mode='HTML')
 
-# --- 2. معالجة الروابط وتحميل الفيديوهات ---
-@dp.message_handler()
-async def download_video(message: types.Message):
+# استقبال الرابط وعرض خيارات (فيديو أو صوت)
+@dp.message_handler(lambda message: message.text.startswith("http"))
+async def ask_format(message: types.Message):
     url = message.text
-    if not url.startswith("http"):
+    user_data[message.from_user.id] = url # حفظ الرابط مؤقتاً
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🎬 فيديو (Video)", callback_data="opt_video"))
+    markup.add(InlineKeyboardButton("🎵 صوت (MP3)", callback_data="opt_audio"))
+    
+    await message.reply("⚡️ وصل الرابط! اختر ماذا تريد استخراجه:", reply_markup=markup)
+
+# معالجة الضغط على الأزرار
+@dp.callback_query_handler(lambda c: c.data.startswith('opt_'))
+async def process_options(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    url = user_data.get(user_id)
+    
+    if not url:
+        await callback_query.answer("⚠️ حدث خطأ، أرسل الرابط مرة أخرى.")
         return
 
-    status_msg = await message.reply("⚡️ جاري معالجة الرابط.. استعد للإبهار!")
+    if callback_query.data == "opt_audio":
+        await callback_query.message.edit_text("⏳ جاري تحويل الفيديو إلى ملف صوتي...")
+        await download_and_send(callback_query.message, url, is_audio=True)
+    
+    elif callback_query.data == "opt_video":
+        # عرض خيارات الجودة
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton("🌟 جودة عالية (High)", callback_data="res_best"))
+        markup.add(InlineKeyboardButton("📱 جودة متوسطة (Medium)", callback_data="res_medium"))
+        await callback_query.message.edit_text("اختر جودة الفيديو المطلوبة:", reply_markup=markup)
 
-    # إعدادات yt-dlp للتحميل بأفضل جودة ممكنة
+@dp.callback_query_handler(lambda c: c.data.startswith('res_'))
+async def process_video_res(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    url = user_data.get(user_id)
+    quality = "best" if callback_query.data == "res_best" else "worst"
+    
+    await callback_query.message.edit_text(f"⏳ جاري تحميل الفيديو بجودة {'عالية' if quality=='best' else 'متوسطة'}...")
+    await download_and_send(callback_query.message, url, is_audio=False, quality=quality)
+
+async def download_and_send(message, url, is_audio=False, quality="best"):
+    filename = "downloaded_file"
     ydl_opts = {
-        'format': 'best',
-        'outtmpl': 'video.mp4',
         'quiet': True,
         'no_warnings': True,
+        'outtmpl': filename,
     }
+
+    if is_audio:
+        ydl_opts['format'] = 'bestaudio/best'
+        extension = ".mp3"
+    else:
+        ydl_opts['format'] = f'{quality}video+bestaudio/best'
+        extension = ".mp4"
+
+    ydl_opts['outtmpl'] = filename + extension
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # استخراج المعلومات والتحميل
-            info = ydl.extract_info(url, download=True)
-            filename = 'video.mp4'
+            ydl.download([url])
+            final_file = filename + extension
             
-            # إرسال الفيديو للمستخدم بالبصمة الجديدة
-            with open(filename, 'rb') as video:
-                await message.reply_video(
-                    video, 
-                    caption=f"✅ تم استخراج الفيديو بنجاح\n\nالمطور: @i_wi_w",
-                    parse_mode='HTML'
-                )
+            with open(final_file, 'rb') as file:
+                if is_audio:
+                    await message.answer_audio(file, caption="🎵 تم استخراج الصوت بنجاح\nالمطور: @i_wi_w")
+                else:
+                    await message.answer_video(file, caption="✅ تم استخراج الفيديو بنجاح\nالمطور: @i_wi_w")
             
-            # تنظيف الملفات المؤقتة بعد الإرسال
-            if os.path.exists(filename):
-                os.remove(filename)
-            
-            await status_msg.delete()
+            os.remove(final_file)
+            await message.delete() # حذف رسالة الانتظار
 
     except Exception as e:
-        await status_msg.edit(f"❌ عذراً، حدث خطأ أثناء التحميل. تأكد من الرابط وحاول مجدداً.")
-        logging.error(f"Error during download: {e}")
+        await message.answer("❌ عذراً، هذا الرابط غير مدعوم حالياً أو حدث خطأ.")
+        logging.error(f"Error: {e}")
 
-# --- 3. تشغيل البوت ---
 if __name__ == '__main__':
-    keep_alive() # تشغيل السيرفر الوهمي في الخلفية
-    print("Bot is starting...")
+    keep_alive()
     executor.start_polling(dp, skip_updates=True)
     
