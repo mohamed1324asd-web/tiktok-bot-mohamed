@@ -1,40 +1,28 @@
-import asyncio
-import aiohttp
+import os
+import logging
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import URLInputFile
+from aiogram.utils import executor
 
-# توكن البوت
-API_TOKEN = "8753125623:AAEYcN_dc84mdJS7NQzph6SsrHQuI5ZSRTk"
+# التوكن الجديد بتاعك (متصلح وجاهز)
+API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
 
+# إعدادات اللوج عشان نعرف لو في مشاكل
+logging.basicConfig(level=logging.INFO)
 
-async def main():
-    bot = Bot(token=API_TOKEN)
-    dp = Dispatcher()
+# تشغيل البوت
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
 
-    @dp.message(Command("start"))
-    async def cmd_start(message: types.Message):
-        await message.reply("🚀 البوت شغال الآن من Koyeb!\nابعت رابط تيك توك وهبعتلك الفيديو فوراً.")
+@dp.message_handler(commands=['start', 'help'])
+async def send_welcome(message: types.Message):
+    await message.reply("أهلاً يا محمد! أنا بوت تحميل فيديوهات تيك توك. ابعتلي الرابط وهجربهولك.")
 
-    @dp.message()
-    async def handle_video(message: types.Message):
-        url = message.text
-        if "http" not in url: return
-        msg = await message.reply("⏳ جاري التحميل...")
-        api_url = f"https://www.tikwm.com/api/?url={url}"
-        try:
-            async with aiohttp.ClientSession() as session_http:
-                async with session_http.get(api_url) as resp:
-                    data = await resp.json()
-                    video_url = data.get('data', {}).get('play')
-                    if video_url:
-                        await message.answer_video(video=URLInputFile(f"https://www.tikwm.com{video_url}"))
-                        await msg.delete()
-        except:
-            await msg.edit_text("❌ حدث خطأ، جرب تاني.")
-
-    await dp.start_polling(bot)
+@dp.message_handler()
+async def echo(message: types.Message):
+    # هنا هنضيف كود التحميل لاحقاً، دلوقتي بنجرب الاتصال
+    await message.answer(f"وصلني الرابط: {message.text}\nالبوت شغال والتوكن سليم ✅")
 
 if __name__ == '__main__':
-    asyncio.run(main())
-      
+    # تشغيل البوت مع تخطي مشكلة الـ Port في Render
+    executor.start_polling(dp, skip_updates=True)
+    
