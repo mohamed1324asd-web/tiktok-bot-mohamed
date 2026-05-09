@@ -7,17 +7,12 @@ import yt_dlp
 from flask import Flask
 from threading import Thread
 
-# إعدادات البوت (التوكن الجديد بتاعك)
+# إعدادات البوت
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
 
-# إعداد اللوجات
 logging.basicConfig(level=logging.INFO)
-
-# تشغيل البوت
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
-
-# سيرفر وهمي عشان Render ما يقفلش البوت
 app = Flask('')
 
 @app.route('/')
@@ -31,7 +26,6 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# --- رسالة الترحيب الفخمة ---
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     welcome_text = (
@@ -43,11 +37,10 @@ async def send_welcome(message: types.Message):
         "• 🎥 شورتس يوتيوب والمنصات العالمية\n"
         "• 🎵 استخراج الصوت من أي فيديو\n\n"
         "<b>كل ما عليك هو إرسال الرابط.. وسأقوم بالسحر! ✨</b>\n\n"
-        "<i>بواسطة المطور: محمد 👨‍💻</i>"
+        "<i>المطور: @i_wi_w</i>"
     )
     await message.reply(welcome_text, parse_mode='HTML')
 
-# --- نظام التحميل الذكي ---
 @dp.message_handler()
 async def download_video(message: types.Message):
     url = message.text
@@ -56,7 +49,6 @@ async def download_video(message: types.Message):
 
     status_msg = await message.reply("⚡️ جاري معالجة الرابط.. استعد للإبهار!")
 
-    # إعدادات yt-dlp لتحميل أفضل جودة
     ydl_opts = {
         'format': 'best',
         'outtmpl': 'video.mp4',
@@ -72,17 +64,17 @@ async def download_video(message: types.Message):
             with open(filename, 'rb') as video:
                 await message.reply_video(
                     video, 
-                    caption=f"✅ تم استخراج الفيديو بنجاح عبر بوت محمد\n\n<i>المطور: @M_7_4_M_E_D</i>",
+                    caption=f"✅ تم استخراج الفيديو بنجاح\n\nالمطور: @i_wi_w",
                     parse_mode='HTML'
                 )
             
-            os.remove(filename) # مسح الفيديو بعد الإرسال لتوفير المساحة
+            os.remove(filename)
             await status_msg.delete()
 
     except Exception as e:
-        await status_msg.edit(f"❌ عذراً، حدث خطأ أثناء التحميل. تأكد من الرابط وحاول مجدداً.")
+        await status_msg.edit(f"❌ عذراً، حدث خطأ أثناء التحميل.")
         logging.error(f"Error: {e}")
 
 if __name__ == '__main__':
-    keep_alive() # تشغيل السيرفر الوهمي
+    keep_alive()
     executor.start_polling(dp, skip_updates=True)
