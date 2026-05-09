@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import URLInputFile
 
 # توكن البوت
-API_TOKEN = '8753125623:AAGMPxhlOf4KdJ3ehX_4URloTq8WMAJJrGU'
+API_TOKEN = 8753125623:AAEYcN_dc8KwdJS7NQrph63arhQuISZSRTk
 
 async def main():
     bot = Bot(token=API_TOKEN)
