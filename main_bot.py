@@ -11,7 +11,6 @@ app = Flask('')
 @app.route('/')
 def home(): return "Multi-Downloader Bot is Alive!"
 def run(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
