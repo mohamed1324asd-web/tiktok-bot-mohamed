@@ -17,7 +17,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 app = Flask('')
 
-# --- إدارة البيانات ---
+# --- إدارة البيانات (ملفات السيرفر) ---
 USERS_FILE = "users.txt"
 CONFIG_FILE = "channels_config.json"
 
@@ -73,7 +73,7 @@ def channels_manage_keyboard():
     markup.add(InlineKeyboardButton("➕ إضافة قناة جديدة", callback_data="add_new_channel"))
     return markup
 
-# --- رسالة الترحيب الأصلية (المميزات) ---
+# --- رسالة الترحيب (التي طلبتها بالمميزات) ---
 WELCOME_TEXT = (
     "<b>أهلاً بك في بوت تحميل ميديا تيك توك ⚡️</b>\n\n"
     "<b>المميزات المتوفرة حالياً:</b>\n"
@@ -97,11 +97,11 @@ async def start_cmd(message: types.Message):
         for ch in channels:
             markup.add(InlineKeyboardButton(f"📢 اشترك هنا {ch}", url=f"https://t.me/{ch.replace('@','')}"))
         markup.add(InlineKeyboardButton("✅ تم الاشتراك (تحقق)", callback_data="check_sub"))
-        await message.reply("⚠️ عذراً! يجب الاشتراك في القنوات التالية أولاً لاستخدام هذه المميزات:", reply_markup=markup)
+        await message.reply(f"⚠️ عذراً! يجب الاشتراك في القنوات التالية أولاً لاستخدام هذه المميزات:\n\n{WELCOME_TEXT}", reply_markup=markup, parse_mode='HTML')
     else:
         await message.reply(WELCOME_TEXT, parse_mode='HTML')
 
-# --- إدارة القنوات ---
+# --- إدارة القنوات (من داخل البوت) ---
 @dp.message_handler(lambda m: m.from_user.id == ADMIN_ID and m.text == "⚙️ إدارة القنوات")
 async def settings_panel(message: types.Message):
     await message.reply("⚙️ **إدارة قنوات الاشتراك:**", reply_markup=channels_manage_keyboard(), parse_mode="Markdown")
@@ -118,14 +118,14 @@ async def admin_callbacks(c: types.CallbackQuery):
         if ch in config["channels"]: config["channels"].remove(ch); set_config(config)
         await c.message.edit_reply_markup(reply_markup=channels_manage_keyboard())
     elif c.data == "add_new_channel":
-        await c.message.answer("أرسل يوزر القناة الجديد مع @ (مثال: @my_channel)")
+        await message_to_send = await bot.send_message(c.from_user.id, "أرسل يوزر القناة الجديد مع @ (مثال: @my_channel)")
 
 @dp.message_handler(lambda m: m.from_user.id == ADMIN_ID and m.text.startswith("@"))
 async def add_channel_confirm(m: types.Message):
     config = get_config()
     if m.text not in config["channels"]:
         config["channels"].append(m.text); set_config(config)
-        await m.reply(f"✅ تم إضافة {m.text} بنجاح.", reply_markup=admin_main_keyboard())
+        await m.reply(f"✅ تم إضافة {m.text} بنجاح لقائمة القنوات.", reply_markup=admin_main_keyboard())
 
 # --- الإحصائيات والإذاعة ---
 @dp.message_handler(lambda m: m.from_user.id == ADMIN_ID and m.text == "📊 الإحصائيات")
@@ -134,7 +134,7 @@ async def show_stats(m: types.Message):
     await m.reply(f"📊 عدد مستخدمي البوت الحاليين: {count}")
 
 @dp.message_handler(lambda m: m.from_user.id == ADMIN_ID and m.text == "📢 إذاعة (Broadcast)")
-async def ask_br(m: types.Message): await m.reply("أرسل رسالة الإذاعة الآن:")
+async def ask_br(m: types.Message): await m.reply("أرسل رسالة الإذاعة التي تريد توجيهها للكل الآن:")
 
 @dp.message_handler(lambda m: m.from_user.id == ADMIN_ID and not m.text.startswith("/") and not m.text.startswith("http") and not m.text.startswith("@"))
 async def do_br(m: types.Message):
@@ -151,10 +151,19 @@ user_data = {}
 @dp.message_handler(lambda m: m.text.startswith("http"))
 async def handle_download(m: types.Message):
     is_sub, _ = await check_all_subs(m.from_user.id)
-    if not is_sub: await m.reply("⚠️ اشترك أولاً!"); return
+    if not is_sub:
+        config = get_config()
+        markup = InlineKeyboardMarkup(row_width=1)
+        _, channels = await check_all_subs(m.from_user.id)
+        for ch in channels:
+            markup.add(InlineKeyboardButton(f"📢 اشترك هنا {ch}", url=f"https://t.me/{ch.replace('@','')}"))
+        markup.add(InlineKeyboardButton("✅ تم الاشتراك (تحقق)", callback_data="check_sub"))
+        await m.reply("⚠️ يجب عليك الاشتراك في القنوات أولاً للتحميل!", reply_markup=markup)
+        return
+    
     user_data[m.from_user.id] = m.text
     mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🎬 فيديو", callback_data="opt_video"), InlineKeyboardButton("🎵 صوت", callback_data="opt_audio"))
-    await m.reply("⚡️ اختر النوع المطلوب:", reply_markup=mk)
+    await m.reply("⚡️ اختر النوع المطلوب للتحميل:", reply_markup=mk)
 
 @dp.callback_query_handler(lambda c: c.data.startswith('opt_'))
 async def opt_proc(c: types.CallbackQuery):
@@ -163,13 +172,13 @@ async def opt_proc(c: types.CallbackQuery):
         await c.message.edit_text("⏳ جاري التحميل كصوت..."); await download_send(c.message, url, True)
     else:
         mk = InlineKeyboardMarkup().add(InlineKeyboardButton("🌟 عالية", callback_data="res_best"), InlineKeyboardButton("📱 متوسطة", callback_data="res_medium"))
-        await c.message.edit_text("اختر الجودة:", reply_markup=mk)
+        await c.message.edit_text("اختر الجودة المطلوبة للفيديو:", reply_markup=mk)
 
 @dp.callback_query_handler(lambda c: c.data.startswith('res_'))
 async def res_proc(c: types.CallbackQuery):
     url = user_data.get(c.from_user.id)
     q = "best" if c.data == "res_best" else "worst"
-    await c.message.edit_text("⏳ جاري التحميل..."); await download_send(c.message, url, False, q)
+    await c.message.edit_text("⏳ جاري معالجة وتحميل الفيديو..."); await download_send(c.message, url, False, q)
 
 async def download_send(msg, url, is_audio, q="best"):
     ext = ".mp3" if is_audio else ".mp4"
@@ -183,14 +192,15 @@ async def download_send(msg, url, is_audio, q="best"):
                 if is_audio: await msg.answer_audio(f, caption=cap)
                 else: await msg.answer_video(f, caption=cap)
             os.remove(fn); await msg.delete()
-    except: await msg.answer("❌ خطأ في معالجة الرابط!")
+    except: await msg.answer("❌ حدث خطأ غير متوقع في الرابط!")
 
 @dp.callback_query_handler(lambda c: c.data == "check_sub")
 async def check_btn(c: types.CallbackQuery):
     is_sub, _ = await check_all_subs(c.from_user.id)
-    if is_sub: await c.message.edit_text("✅ تم التحقق! يمكنك الآن إرسال الروابط.")
-    else: await c.answer("❌ لم تشترك في كل القنوات بعد!", show_alert=True)
+    if is_sub: await c.message.edit_text("✅ شكراً لثقتك! تم التحقق بنجاح. يمكنك الآن إرسال الروابط.")
+    else: await c.answer("❌ أنت لم تشترك في كل القنوات بعد!", show_alert=True)
 
 if __name__ == '__main__':
     keep_alive()
     executor.start_polling(dp, skip_updates=True)
+    
