@@ -9,14 +9,15 @@ from threading import Thread
 
 # --- الإعدادات الأساسية ---
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
-ADMIN_ID = 8416486845  # الـ ID الجديد بتاعك يا محمد
+ADMIN_ID = 8416486845 
+CHANNEL_USER = "@i_wi_w" # يوزر قناتك هنا (تأكد إن البوت أدمن في القناة)
+CHANNEL_LINK = "https://t.me/i_wi_w" # رابط قناتك
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 app = Flask('')
 
-# ملف حفظ المستخدمين
 users_file = "users.txt"
 if not os.path.exists(users_file): open(users_file, "w").close()
 
@@ -33,11 +34,27 @@ def home(): return "✅ Bot is Online!"
 def keep_alive():
     Thread(target=lambda: app.run(host='0.0.0.0', port=8080)).start()
 
+# --- دالة فحص الاشتراك الإجباري ---
+async def check_subscribe(user_id):
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USER, user_id=user_id)
+        if member.status in ['member', 'administrator', 'creator']:
+            return True
+        return False
+    except:
+        # لو البوت مش أدمن في القناة أو اليوزر غلط هيسمح بالتحميل عشان البوت ميتعطلش
+        return True
+
+def subscribe_markup():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📢 اشترك في القناة أولاً", url=CHANNEL_LINK))
+    markup.add(InlineKeyboardButton("✅ تم الاشتراك (تفعيل)", callback_data="check_sub"))
+    return markup
+
 # --- لوحة مفاتيح الأدمن ---
 def admin_keyboard():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("📊 الإحصائيات"), KeyboardButton("📢 إذاعة (Broadcast)"))
-    markup.add(KeyboardButton("🔒 قفل القنوات (قريباً)"))
     return markup
 
 # --- رسالة الترحيب ---
@@ -45,48 +62,57 @@ def admin_keyboard():
 async def send_welcome(message: types.Message):
     add_user(message.from_user.id)
     
-    welcome_text = (
-        "<b>مرحباً بك في بوت الـ VIP العالمي! 💎</b>\n\n"
-        "أرسل رابط الفيديو الآن واختر الصيغة المناسبة.\n\n"
-        "<i>المطور: @i_wi_w</i>"
-    )
-    
-    # التحقق من الأدمن
+    if not await check_subscribe(message.from_user.id) and message.from_user.id != ADMIN_ID:
+        await message.reply(f"⚠️ عذراً! يجب عليك الاشتراك في قناة البوت أولاً لاستخدامه.\n\nاشترك هنا: {CHANNEL_USER}", reply_markup=subscribe_markup())
+        return
+
     if message.from_user.id == ADMIN_ID:
         await message.reply("أهلاً بك يا مطورنا! تم تفعيل لوحة التحكم.", reply_markup=admin_keyboard())
-    else:
-        await message.reply(welcome_text, parse_mode='HTML')
+    
+    await message.reply("<b>مرحباً بك في بوت التحميل العالمي! 💎</b>\n\nأرسل رابط الفيديو الآن..", parse_mode='HTML')
 
-# --- وظائف الأدمن ---
+# --- معالجة التحقق من الاشتراك ---
+@dp.callback_query_handler(lambda c: c.data == "check_sub")
+async def verify_sub(callback_query: types.CallbackQuery):
+    if await check_subscribe(callback_query.from_user.id):
+        await callback_query.message.edit_text("✅ شكراً لثقتك! تم تفعيل البوت بنجاح. أرسل الرابط الآن.")
+    else:
+        await callback_query.answer("❌ أنت لم تشترك في القناة بعد!", show_alert=True)
+
+# --- وظائف الأدمن (إحصائيات وإذاعة) ---
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and message.text == "📊 الإحصائيات")
 async def show_stats(message: types.Message):
     with open(users_file, "r") as f:
         count = len(f.readlines())
-    await message.reply(f"📊 عدد مستخدمي البوت الحاليين: {count}")
+    await message.reply(f"📊 عدد المستخدمين: {count}")
 
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and message.text == "📢 إذاعة (Broadcast)")
 async def ask_broadcast(message: types.Message):
-    await message.reply("أرسل الرسالة التي تريد إذاعتها الآن.")
+    await message.reply("أرسل رسالة الإذاعة الآن.")
 
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and not message.text.startswith("/") and not message.text.startswith("http"))
 async def do_broadcast(message: types.Message):
-    if message.text in ["📊 الإحصائيات", "📢 إذاعة (Broadcast)", "🔒 قفل القنوات (قريباً)"]: return
+    if message.text in ["📊 الإحصائيات", "📢 إذاعة (Broadcast)"]: return
     with open(users_file, "r") as f:
         users = f.read().splitlines()
     count = 0
     for user in users:
-        try:
-            await bot.send_message(user, message.text)
-            count += 1
+        try: await bot.send_message(user, message.text); count += 1
         except: pass
-    await message.reply(f"✅ تم إرسال الإذاعة لـ {count} مستخدم.")
+    await message.reply(f"✅ تم الإرسال لـ {count} مستخدم.")
 
-# --- نظام التحميل (Inline Buttons) ---
+# --- نظام التحميل (مع فحص الاشتراك) ---
 user_data = {}
 
 @dp.message_handler(lambda message: message.text.startswith("http"))
-async def ask_format(message: types.Message):
+async def handle_link(message: types.Message):
     add_user(message.from_user.id)
+    
+    # فحص الاشتراك قبل البدء
+    if not await check_subscribe(message.from_user.id) and message.from_user.id != ADMIN_ID:
+        await message.reply("⚠️ اشترك في القناة أولاً لتتمكن من التحميل!", reply_markup=subscribe_markup())
+        return
+
     user_data[message.from_user.id] = message.text
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🎬 فيديو", callback_data="opt_video"), InlineKeyboardButton("🎵 صوت", callback_data="opt_audio"))
@@ -117,11 +143,12 @@ async def download_and_send(message, url, is_audio=False, quality="best"):
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
             with open(filename, 'rb') as f:
-                if is_audio: await message.answer_audio(f, caption="المطور: @i_wi_w")
-                else: await message.answer_video(f, caption="المطور: @i_wi_w")
+                caption = "المطور: @i_wi_w"
+                if is_audio: await message.answer_audio(f, caption=caption)
+                else: await message.answer_video(f, caption=caption)
             os.remove(filename)
             await message.delete()
-    except: await message.answer("❌ خطأ!")
+    except: await message.answer("❌ حدث خطأ في الرابط!")
 
 if __name__ == '__main__':
     keep_alive()
