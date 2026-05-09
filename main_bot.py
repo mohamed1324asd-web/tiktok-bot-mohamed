@@ -1,7 +1,6 @@
-import os
 import logging
+import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
 
 # التوكن بتاعك
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
@@ -9,20 +8,23 @@ API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
 # إعداد اللوج
 logging.basicConfig(level=logging.INFO)
 
-# تشغيل البوت
+# تشغيل البوت والديسباتشر بالإصدار الجديد
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher()
 
-@dp.message_handler(commands=['start', 'help'])
+@dp.message(commands=['start'])
 async def send_welcome(message: types.Message):
-    await message.reply("أهلاً يا محمد! البوت شغال دلوقتي 100%. ابعتلي أي رابط وهرد عليك.")
+    await message.reply("أهلاً يا محمد! البوت شغال دلوقتي على السيرفر 100% ✅")
 
-@dp.message_handler()
+@dp.message()
 async def echo(message: types.Message):
-    await message.answer(f"وصلني الرابط: {message.text}\nالبوت متصل بالسيرفر ✅")
+    await message.answer(f"وصلني الرابط: {message.text}\nالبوت متصل وشغال أهو!")
+
+async def main():
+    await dp.start_polling(bot)
 
 if __name__ == '__main__':
-    # الكود ده متوافق مع الإصدار اللي على Render
-    from aiogram import executor
-    executor.start_polling(dp, skip_updates=True)
-    
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.error("Bot stopped!")
