@@ -9,29 +9,31 @@ from threading import Thread
 
 # --- الإعدادات الأساسية ---
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
-ADMIN_ID = 7468160538  # تم وضع الآي دي الخاص بك هنا يا محمد
+ADMIN_ID = 8416486845  # الـ ID الجديد بتاعك يا محمد
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 app = Flask('')
 
-# مخزن بسيط للمستخدمين (للإحصائيات والإذاعة)
+# ملف حفظ المستخدمين
 users_file = "users.txt"
 if not os.path.exists(users_file): open(users_file, "w").close()
 
 def add_user(user_id):
-    with open(users_file, "r+") as f:
-        if str(user_id) not in f.read():
+    with open(users_file, "r") as f:
+        existing_users = f.read().splitlines()
+    if str(user_id) not in existing_users:
+        with open(users_file, "a") as f:
             f.write(f"{user_id}\n")
 
 @app.route('/')
-def home(): return "✅ Admin Bot is Online!"
+def home(): return "✅ Bot is Online!"
 
 def keep_alive():
     Thread(target=lambda: app.run(host='0.0.0.0', port=8080)).start()
 
-# --- لوحة مفاتيح الأدمن (تظهر لك أنت فقط) ---
+# --- لوحة مفاتيح الأدمن ---
 def admin_keyboard():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("📊 الإحصائيات"), KeyboardButton("📢 إذاعة (Broadcast)"))
@@ -49,12 +51,13 @@ async def send_welcome(message: types.Message):
         "<i>المطور: @i_wi_w</i>"
     )
     
+    # التحقق من الأدمن
     if message.from_user.id == ADMIN_ID:
-        await message.reply("أهلاً بك يا مطورنا! تم تفعيل لوحة التحكم الخاصة بك.", reply_markup=admin_keyboard())
-    
-    await message.reply(welcome_text, parse_mode='HTML')
+        await message.reply("أهلاً بك يا مطورنا! تم تفعيل لوحة التحكم.", reply_markup=admin_keyboard())
+    else:
+        await message.reply(welcome_text, parse_mode='HTML')
 
-# --- وظائف الأدمن (الإحصائيات والإذاعة) ---
+# --- وظائف الأدمن ---
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and message.text == "📊 الإحصائيات")
 async def show_stats(message: types.Message):
     with open(users_file, "r") as f:
@@ -63,25 +66,22 @@ async def show_stats(message: types.Message):
 
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and message.text == "📢 إذاعة (Broadcast)")
 async def ask_broadcast(message: types.Message):
-    await message.reply("أرسل الرسالة التي تريد إذاعتها الآن (نص فقط).")
+    await message.reply("أرسل الرسالة التي تريد إذاعتها الآن.")
 
-# هنا أي رسالة يرسلها الأدمن بعد ضغط زر الإذاعة سيتم إرسالها للكل
 @dp.message_handler(lambda message: message.from_user.id == ADMIN_ID and not message.text.startswith("/") and not message.text.startswith("http"))
 async def do_broadcast(message: types.Message):
     if message.text in ["📊 الإحصائيات", "📢 إذاعة (Broadcast)", "🔒 قفل القنوات (قريباً)"]: return
-    
     with open(users_file, "r") as f:
-        users = f.readlines()
-    
+        users = f.read().splitlines()
     count = 0
     for user in users:
         try:
-            await bot.send_message(user.strip(), message.text)
+            await bot.send_message(user, message.text)
             count += 1
         except: pass
     await message.reply(f"✅ تم إرسال الإذاعة لـ {count} مستخدم.")
 
-# --- نظام التحميل (كما هو للأزرار والجودة) ---
+# --- نظام التحميل (Inline Buttons) ---
 user_data = {}
 
 @dp.message_handler(lambda message: message.text.startswith("http"))
