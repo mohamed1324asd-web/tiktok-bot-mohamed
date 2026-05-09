@@ -3,10 +3,10 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
-# التوكن الجديد بتاعك (متصلح وجاهز)
+# التوكن بتاعك
 API_TOKEN = "8753125623:AAEYcN_dc8KwdJS7NQrph63arhQulSZSRTk"
 
-# إعدادات اللوج عشان نعرف لو في مشاكل
+# إعداد اللوج
 logging.basicConfig(level=logging.INFO)
 
 # تشغيل البوت
@@ -15,14 +15,14 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(commands=['start', 'help'])
 async def send_welcome(message: types.Message):
-    await message.reply("أهلاً يا محمد! أنا بوت تحميل فيديوهات تيك توك. ابعتلي الرابط وهجربهولك.")
+    await message.reply("أهلاً يا محمد! البوت شغال دلوقتي 100%. ابعتلي أي رابط وهرد عليك.")
 
 @dp.message_handler()
 async def echo(message: types.Message):
-    # هنا هنضيف كود التحميل لاحقاً، دلوقتي بنجرب الاتصال
-    await message.answer(f"وصلني الرابط: {message.text}\nالبوت شغال والتوكن سليم ✅")
+    await message.answer(f"وصلني الرابط: {message.text}\nالبوت متصل بالسيرفر ✅")
 
 if __name__ == '__main__':
-    # تشغيل البوت مع تخطي مشكلة الـ Port في Render
+    # الكود ده متوافق مع الإصدار اللي على Render
+    from aiogram import executor
     executor.start_polling(dp, skip_updates=True)
     
